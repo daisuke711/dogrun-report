@@ -1,8 +1,9 @@
-const CACHE = 'dogrun-report-v1';
+const CACHE = 'dogrun-report-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
+  './dog.png',
   './icon-192.png',
   './icon-512.png',
   './icon-maskable-512.png'

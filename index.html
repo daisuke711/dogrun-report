@@ -686,150 +686,184 @@ document.getElementById('btn-image').onclick = async ()=>{
   }
 };
 
-function loadImage(file){
-  return new Promise((res, rej)=>{
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = ()=>{ URL.revokeObjectURL(url); res(img); };
-    img.onerror = ()=>{ URL.revokeObjectURL(url); rej(new Error('load')); };
-    img.src = url;
+
+
+const PALETTE = {
+  CREAM:'#FDF8EE', WHITE:'#FFFFFF', INK:'#3A322A', SOFT:'#7A7064',
+  LINE:'#EEE7DA', EDGE:'#E8DECE',
+  GREEN:'#7AA86A', BLUE:'#7AA0C4', ORANGE:'#E29656', PINK:'#E28A96',
+  STAR:'#F0B23C', STAR_OFF:'#E0D8CA', TITLE:'#5A4632'
+};
+
+let dogImg = null;
+function getDog(){
+  if(dogImg) return Promise.resolve(dogImg);
+  return new Promise(res=>{
+    const im = new Image();
+    im.onload = ()=>{ dogImg = im; res(im); };
+    im.onerror = ()=> res(null);
+    im.src = 'dog.png';
   });
 }
 
-// 折り返し描画。返り値は次のy座標
-function wrapText(ctx, text, x, y, maxW, lineH, maxLines){
-  const chars = [...String(text)];
-  let line = '', lines = [];
-  for(const ch of chars){
-    if(ch === '\n'){ lines.push(line); line = ''; continue; }
-    const test = line + ch;
-    if(ctx.measureText(test).width > maxW && line){
-      lines.push(line); line = ch;
-    } else { line = test; }
-  }
-  if(line) lines.push(line);
-  if(maxLines && lines.length > maxLines){
-    lines = lines.slice(0, maxLines);
-    lines[maxLines-1] = lines[maxLines-1].slice(0, -1) + '…';
-  }
-  lines.forEach((l,i)=> ctx.fillText(l, x, y + i*lineH));
-  return y + lines.length * lineH;
+// 角丸矩形
+function rr(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+// 折り返し（行配列を返す）
+function wrapLines(ctx, text, maxW){
+  const out = [];
+  String(text).split('\n').forEach(para=>{
+    let line = '';
+    for(const ch of [...para]){
+      if(ctx.measureText(line+ch).width > maxW && line){ out.push(line); line = ch; }
+      else line += ch;
+    }
+    out.push(line);
+  });
+  return out;
 }
 
 async function drawReport(){
-  const W = 1080, H = 1350;                 // Instagram 4:5
-  const c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  const ctx = c.getContext('2d');
-
-  const GRASS = '#4A7C3F', INK = '#22201C', SOFT = '#6B675E',
-        PAPER = '#FBFAF7', LINE = '#E2DED4', PAW = '#C2703F';
+  const P = PALETTE;
   const F = '"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif';
-  const PAD = 72;
+  const W = 1080, PAD = 48, INNER = W - PAD*2;
 
-  ctx.fillStyle = PAPER;
+  const dog = await getDog();
+
+  // ---- 事前計算用の計測キャンバス ----
+  const mc = document.createElement('canvas').getContext('2d');
+
+  const infoRows = [];
+  const push = (k,val)=>{ if(val) infoRows.push([k,val]); };
+  push('施設名', v('f-name'));
+  push('訪問日', v('f-date'));
+  push('天気', v('f-weather'));
+  push('料金（犬1頭）', v('f-fee-dog'));
+  push('料金（飼い主1人）', v('f-fee-owner'));
+  push('駐車場', v('f-park'));
+  push('住所', v('f-addr'));
+  push('営業時間', v('f-hours'));
+
+  const rateRows = Math.ceil(RATE_ITEMS.length / 2);
+
+  const threeDefs = [
+    ['良かったところ', P.GREEN,  v('f-good')  || '（記入なし）'],
+    ['気になったところ', P.ORANGE, v('f-bad')   || '（記入なし）'],
+    ['今日のエピソード', P.PINK,   v('f-story') || '（記入なし）']
+  ];
+  mc.font = '27px ' + F;
+  const threeLines = threeDefs.map(([,,body]) => wrapLines(mc, body, INNER - 60));
+
+  // ---- 全体の高さを算出 ----
+  const HEADER_H = 250;
+  const infoH  = 56 + infoRows.length*46 + 40;
+  const rateH  = 56 + rateRows*52 + 34;
+  const threeH = threeLines.map(l => 56 + l.length*42 + 40);
+  const H = PAD + HEADER_H + 30 + infoH + 26 + rateH + 26
+            + threeH.reduce((a,b)=>a+b+22, 0) + 16;
+
+  const c = document.createElement('canvas');
+  c.width = W; c.height = Math.round(H);
+  const ctx = c.getContext('2d');
+  ctx.textBaseline = 'top';
+
+  ctx.fillStyle = P.CREAM;
   ctx.fillRect(0,0,W,H);
 
-  // --- 上部：写真かカラーブロック ---
-  const HERO = 560;
-  if(photos.length){
-    try{
-      const img = await loadImage(photos[0]);
-      const r = Math.max(W/img.width, HERO/img.height);
-      const dw = img.width*r, dh = img.height*r;
-      ctx.drawImage(img, (W-dw)/2, (HERO-dh)/2, dw, dh);
-      const g = ctx.createLinearGradient(0, HERO*0.35, 0, HERO);
-      g.addColorStop(0,'rgba(0,0,0,0)');
-      g.addColorStop(1,'rgba(0,0,0,0.62)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0,0,W,HERO);
-    }catch{
-      ctx.fillStyle = GRASS; ctx.fillRect(0,0,W,HERO);
-    }
-  } else {
-    ctx.fillStyle = GRASS;
-    ctx.fillRect(0,0,W,HERO);
+  // ---- ヘッダー ----
+  ctx.fillStyle = '#FFFCF5';
+  ctx.strokeStyle = P.EDGE; ctx.lineWidth = 3;
+  rr(ctx, PAD, PAD, INNER, HEADER_H, 28); ctx.fill(); ctx.stroke();
+
+  let shift = 0;
+  if(dog){
+    const dh = 190, dw = dog.width * (dh/dog.height);
+    ctx.drawImage(dog, PAD+26, PAD+HEADER_H-dh-18, dw, dh);
+    shift = 60;
+  }
+  ctx.fillStyle = P.TITLE;
+  ctx.font = '700 58px ' + F;
+  const title = 'ドッグランレポート';
+  ctx.fillText(title, (W - ctx.measureText(title).width)/2 + shift, PAD+52);
+
+  ctx.fillStyle = P.SOFT;
+  ctx.font = '26px ' + F;
+  const sub = '実際に行ってきた体験を、正直にレポートします！';
+  ctx.fillText(sub, (W - ctx.measureText(sub).width)/2 + shift, PAD+140);
+
+  let y = PAD + HEADER_H + 30;
+
+  // ---- カード枠 ----
+  function card(y, h, accent, label){
+    ctx.fillStyle = P.WHITE;
+    ctx.strokeStyle = P.LINE; ctx.lineWidth = 3;
+    rr(ctx, PAD, y, INNER, h, 22); ctx.fill(); ctx.stroke();
+
+    ctx.save();
+    rr(ctx, PAD, y, INNER, h, 22); ctx.clip();
+    ctx.fillStyle = accent;
+    rr(ctx, PAD, y, 300, 56, 22); ctx.fill();
+    ctx.fillRect(PAD, y+30, 300, 26);
+    ctx.restore();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 28px ' + F;
+    ctx.fillText(label, PAD+26, y+13);
+    return y + 80;
   }
 
-  // 施設名（写真の上）
-  ctx.fillStyle = '#fff';
-  ctx.textBaseline = 'alphabetic';
-  ctx.font = '700 62px ' + F;
-  const nameLines = [];
-  {
-    const chars = [...v('f-name')];
-    let line = '';
-    for(const ch of chars){
-      if(ctx.measureText(line+ch).width > W - PAD*2 && line){ nameLines.push(line); line = ch; }
-      else line += ch;
+  // ---- 基本情報 ----
+  let yy = card(y, infoH, P.GREEN, '基本情報');
+  infoRows.forEach(([k,val])=>{
+    ctx.fillStyle = P.SOFT; ctx.font = '26px ' + F;
+    ctx.fillText(k, PAD+30, yy);
+    ctx.fillStyle = P.INK;  ctx.font = '600 26px ' + F;
+    const maxW = INNER - 330;
+    let t = val;
+    if(ctx.measureText(t).width > maxW){
+      while(t.length > 1 && ctx.measureText(t+'…').width > maxW) t = t.slice(0,-1);
+      t += '…';
     }
-    if(line) nameLines.push(line);
-  }
-  const shown = nameLines.slice(0,2);
-  let ny = HERO - 60 - (shown.length-1)*74;
-  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12;
-  shown.forEach((l,i)=> ctx.fillText(l, PAD, ny + i*74));
-  // 日付
-  ctx.font = '600 30px ' + F;
-  ctx.fillStyle = 'rgba(255,255,255,.92)';
-  const dLabel = (v('f-date')||'').replace(/-/g,'.') + (v('f-weather') ? '　' + v('f-weather') : '');
-  if(dLabel.trim()) ctx.fillText(dLabel, PAD, ny - 90);
-  ctx.shadowBlur = 0;
-
-  // --- 評価（上位のみ） ---
-  let y = HERO + 78;
-  const top = RATE_ITEMS
-    .map(([label,key])=>({label, n:scores[key]}))
-    .sort((a,b)=> b.n - a.n)
-    .slice(0,5);
-
-  ctx.font = '700 26px ' + F;
-  ctx.fillStyle = GRASS;
-  ctx.fillText('よかったところ', PAD, y);
-  y += 46;
-
-  top.forEach(item=>{
-    ctx.font = '600 32px ' + F;
-    ctx.fillStyle = INK;
-    ctx.fillText(item.label, PAD, y);
-    ctx.font = '30px ' + F;
-    ctx.fillStyle = PAW;
-    const s = '★'.repeat(item.n) + '☆'.repeat(5-item.n);
-    ctx.fillText(s, W - PAD - ctx.measureText(s).width, y);
-    y += 22;
-    ctx.strokeStyle = LINE; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W-PAD, y); ctx.stroke();
-    y += 36;
+    ctx.fillText(t, PAD+330, yy);
+    yy += 46;
   });
+  y += infoH + 26;
 
-  // --- コメント ---
-  y += 14;
-  const comment = v('f-story') || v('f-good') || '';
-  if(comment){
-    ctx.font = '30px ' + F;
-    ctx.fillStyle = SOFT;
-    y = wrapText(ctx, comment, PAD, y, W - PAD*2, 46, 3);
-  }
+  // ---- 評価 ----
+  yy = card(y, rateH, P.BLUE, '評価');
+  const colW = (INNER - 60) / 2;
+  RATE_ITEMS.forEach(([label,key], i)=>{
+    const n = scores[key];
+    const cx = PAD + 30 + (i % 2) * (colW + 30);
+    const cy = yy + Math.floor(i / 2) * 52;
+    ctx.fillStyle = P.INK; ctx.font = '25px ' + F;
+    ctx.fillText(label, cx, cy);
+    const sx = cx + colW - 215;
+    ctx.font = '26px ' + F;
+    for(let s=0; s<5; s++){
+      ctx.fillStyle = s < n ? P.STAR : P.STAR_OFF;
+      ctx.fillText('★', sx + s*30, cy);
+    }
+    ctx.fillStyle = P.SOFT; ctx.font = '22px ' + F;
+    ctx.fillText('(' + n + '/5)', sx + 165, cy + 3);
+  });
+  y += rateH + 26;
 
-  // --- 下部：料金など ---
-  const footY = H - 118;
-  ctx.strokeStyle = LINE; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(PAD, footY - 46); ctx.lineTo(W-PAD, footY - 46); ctx.stroke();
-
-  const info = [];
-  if(v('f-fee-dog'))   info.push('犬 ' + v('f-fee-dog'));
-  if(v('f-fee-owner')) info.push('人 ' + v('f-fee-owner'));
-  if(v('f-park'))      info.push('P ' + v('f-park'));
-  ctx.font = '28px ' + F;
-  ctx.fillStyle = SOFT;
-  if(info.length) wrapText(ctx, info.join('　/　'), PAD, footY, W - PAD*2, 40, 2);
-
-  // 肉球マーク
-  ctx.fillStyle = PAW;
-  const px = W - PAD - 18, py = footY - 6, s = 15;
-  ctx.beginPath(); ctx.ellipse(px, py+s*0.28, s*0.52, s*0.45, 0, 0, 7); ctx.fill();
-  [[-0.52,-0.62],[-0.18,-0.86],[0.18,-0.86],[0.52,-0.62]].forEach(([dx,dy])=>{
-    ctx.beginPath(); ctx.ellipse(px+dx*s, py+dy*s, s*0.25, s*0.25, 0, 0, 7); ctx.fill();
+  // ---- 3カード ----
+  threeDefs.forEach(([label, accent], i)=>{
+    const h = threeH[i];
+    let ty = card(y, h, accent, label);
+    ctx.fillStyle = P.INK; ctx.font = '27px ' + F;
+    threeLines[i].forEach((l,j)=> ctx.fillText(l, PAD+30, ty + j*42));
+    y += h + 22;
   });
 
   return c;
@@ -916,7 +950,19 @@ if(!window.showDirectoryPicker){
 /* ---------- Service Worker ---------- */
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      // 起動のたびに新しい版がないか確認する
+      reg.update().catch(()=>{});
+      setInterval(()=> reg.update().catch(()=>{}), 60*60*1000);
+    }).catch(()=>{});
+
+    // 新しい版に切り替わったら自動で読み込み直す
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+      if(reloading) return;
+      reloading = true;
+      location.reload();
+    });
   });
 }
 
