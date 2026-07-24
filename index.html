@@ -78,25 +78,6 @@
   .star:focus-visible{outline:2px solid var(--grass);border-radius:4px}
   .hint{font-size:12px;color:var(--ink-soft);margin:-6px 0 12px}
 
-  /* photos */
-  #drop{
-    border:2px dashed var(--line);border-radius:var(--radius);
-    padding:26px 16px;text-align:center;color:var(--ink-soft);
-    font-size:14px;cursor:pointer;background:var(--grass-soft);
-  }
-  #drop.hot{border-color:var(--grass);color:var(--grass)}
-  #thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:8px;margin-top:12px}
-  .thumb{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
-  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
-  .thumb button{
-    position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;
-    border:none;background:rgba(0,0,0,.6);color:#fff;font-size:13px;cursor:pointer;line-height:1;
-  }
-  .thumb span{
-    position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;
-    font-size:10px;padding:2px 4px;text-align:center;
-  }
-
   /* mic */
   .mic{
     border:1px solid var(--line);background:#fff;border-radius:9px;
@@ -163,7 +144,7 @@
 
 <header>
   <h1>ドッグランレポートメーカー</h1>
-  <p>写真を選んで、★をつけて、感想を書くだけ</p>
+  <p>★をつけて、感想を書くだけ</p>
 </header>
 
 <main>
@@ -236,14 +217,7 @@
   <textarea id="f-story" placeholder="大きい犬に吠えられて隠れてしまった…"></textarea>
 </section>
 
-<section>
-  <h2>写真</h2>
-  <div id="drop">
-    ここに写真をドラッグ、またはタップして選ぶ
-  </div>
-  <input type="file" id="picker" accept="image/*" multiple hidden>
-  <div id="thumbs"></div>
-</section>
+
 
 </main>
 
@@ -347,10 +321,17 @@
 
 <script>
 /* ---------- 評価項目 ---------- */
+/* 評価項目。ここを増やすとアプリ・Markdown・画像すべてに反映されます。
+   行を消せば減り、追加すれば増えます。右側の英字は保存用の名前なので、
+   一度決めたら変えないでください（変えると前の記録が読めなくなります）。 */
 const RATE_ITEMS = [
-  ["広さ","spacious"],["地面","ground"],["清潔さ","clean"],["設備","facility"],
-  ["日陰","shade"],["大型犬向け","big"],["小型犬向け","small"],["初心者向け","beginner"],
-  ["写真映え","photo"],["飼い主満足度","owner"],["ほむら満足度","homura"]
+  ["広さ","spacious"],
+  ["清潔さ","clean"],
+  ["設備","facility"],
+  ["日陰","shade"],
+  ["写真映え","photo"],
+  ["飼い主満足度","owner"],
+  ["ほむら満足度","homura"]
 ];
 const scores = {};
 const ratesEl = document.getElementById('rates');
@@ -381,52 +362,6 @@ RATE_ITEMS.forEach(([label,key])=>{
   row.append(name, stars);
   ratesEl.appendChild(row);
 });
-
-/* ---------- 写真 ---------- */
-let photos = [];
-const drop = document.getElementById('drop');
-const picker = document.getElementById('picker');
-const thumbs = document.getElementById('thumbs');
-
-drop.onclick = ()=> picker.click();
-picker.onchange = e => addPhotos([...e.target.files]);
-
-['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{
-  e.preventDefault(); drop.classList.add('hot');
-}));
-['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{
-  e.preventDefault(); drop.classList.remove('hot');
-}));
-drop.addEventListener('drop', e=>{
-  addPhotos([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')));
-});
-
-function addPhotos(files){
-  files.forEach(f=>photos.push(f));
-  renderThumbs();
-}
-function renderThumbs(){
-  thumbs.innerHTML = '';
-  photos.forEach((f,i)=>{
-    const d = document.createElement('div');
-    d.className = 'thumb';
-    const img = document.createElement('img');
-    img.src = URL.createObjectURL(f);
-    img.onload = ()=>URL.revokeObjectURL(img.src);
-    const x = document.createElement('button');
-    x.textContent = '×';
-    x.setAttribute('aria-label','この写真を外す');
-    x.onclick = ()=>{ photos.splice(i,1); renderThumbs(); };
-    const cap = document.createElement('span');
-    cap.textContent = photoName(i, f);
-    d.append(img, x, cap);
-    thumbs.appendChild(d);
-  });
-}
-function photoName(i, f){
-  const ext = (f.name.match(/\.[a-z0-9]+$/i)||['.jpg'])[0].toLowerCase();
-  return 'photo' + String(i+1).padStart(2,'0') + ext;
-}
 
 /* ---------- 音声入力 ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -488,12 +423,6 @@ function buildMarkdown(mode){
   L.push('','---','','## 良かったところ','', v('f-good') || '（記入なし）');
   L.push('','---','','## 気になったところ','', v('f-bad') || '（記入なし）');
   L.push('','---','','## 今日のエピソード','', v('f-story') || '（記入なし）');
-  L.push('','---','','## 写真一覧','');
-  if(photos.length){
-    photos.forEach((f,i)=> L.push('![' + photoName(i,f) + '](' + photoName(i,f) + ')'));
-  } else {
-    L.push('（写真なし）');
-  }
   if(mode && PROMPTS[mode]) L.push('','---','', PROMPTS[mode]);
   return L.join('\n');
 }
@@ -738,7 +667,7 @@ insta: `# AIへの依頼（Instagram投稿）
    ・施設名のタグ
    ・行単位でまとめて、そのままコピーできる形にする
 
-3. 1枚目の写真に入れる短い文字（15文字以内）を3案
+3. 投稿の1枚目に入れる短い文字（15文字以内）を3案
 
 ${COMMON_RULES}
 ・宣伝色を出さず、個人の記録として書く`,
@@ -770,7 +699,7 @@ ${COMMON_RULES}
 image: `# AIへの依頼（レポート画像の構成案）
 
 あなたはInstagram向けの画像を設計する編集者です。
-上のレポートをもとに、写真に重ねる文字の構成案を作ってください。
+上のレポートをもとに、画像に載せる文字の構成案を作ってください。
 画像そのものは作らなくて構いません。文字だけ考えてください。
 
 ## 作るもの
@@ -840,9 +769,6 @@ document.getElementById('btn-save').onclick = async ()=>{
       const root = await window.showDirectoryPicker({mode:'readwrite'});
       const dir = await root.getDirectoryHandle(folderName(), {create:true});
       await writeFile(dir, 'report.md', new Blob([buildMarkdown('all')],{type:'text/markdown'}));
-      for(let i=0;i<photos.length;i++){
-        await writeFile(dir, photoName(i,photos[i]), photos[i]);
-      }
       toast('「' + folderName() + '」に保存しました');
       return;
     }catch(err){
@@ -862,7 +788,6 @@ async function writeFile(dir, name, blob){
 
 function downloadFallback(){
   dl(new Blob([buildMarkdown('all')],{type:'text/markdown'}), 'report.md');
-  photos.forEach((f,i)=> setTimeout(()=> dl(f, photoName(i,f)), (i+1)*300));
   toast('ダウンロードフォルダに保存しました');
 }
 function dl(blob, name){
@@ -1194,10 +1119,10 @@ document.getElementById('btn-new').onclick = ()=>{
 if(!window.showDirectoryPicker){
   document.getElementById('btn-save').style.display = 'none';
   document.getElementById('save-hint').textContent =
-    'このブラウザではフォルダ保存が使えません。「コピーしてAIへ」を押して、AIアプリに貼り付けてください。写真はAIアプリから直接添付してください。';
+    'このブラウザではフォルダ保存が使えません。上のボタンでコピーして、AIアプリに貼り付けてください。';
 }else{
   document.getElementById('save-hint').textContent =
-    'report.md と写真をまとめてフォルダに書き出します。パソコン向けです。';
+    'report.md をフォルダに書き出します。パソコン向けです。';
 }
 
 /* ---------- Service Worker ---------- */
