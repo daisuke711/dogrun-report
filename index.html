@@ -248,8 +248,8 @@
 </main>
 
 <section>
-  <h2>なにを作る？</h2>
-  <p class="hint">ボタンを押すとコピーされます。そのままAIアプリに貼り付けてください。</p>
+  <h2>1. まず文章を作る</h2>
+  <p class="hint">ボタンを押すとコピーされます。AIアプリに貼り付けてください。</p>
 
   <button class="out" data-mode="insta">
     <span class="out-ico">📷</span>
@@ -270,24 +270,37 @@
   <button class="out" data-mode="proof">
     <span class="out-ico">✏️</span>
     <span class="out-txt">
-      <strong>文章を整える</strong>
+      <strong>文章を整えるだけ</strong>
       誤字と表記のゆれだけ直してもらいます
+    </span>
+  </button>
+</section>
+
+<section>
+  <h2>2. つづけて画像を作る</h2>
+  <p class="hint">上の返事が返ってきたら、<b>同じチャットのまま</b>これを貼り付けてください。さっきの文章をもとに画像を作ってくれます。</p>
+
+  <button class="out" data-mode="followup">
+    <span class="out-ico">✨</span>
+    <span class="out-txt">
+      <strong>さっきの文章から画像を作る</strong>
+      続けて投げるだけ。貼り直し不要
     </span>
   </button>
 
   <button class="out" data-mode="aiimage">
-    <span class="out-ico">✨</span>
+    <span class="out-ico">🎨</span>
     <span class="out-txt">
-      <strong>レポート画像をAIで作る</strong>
-      指示文をコピー。AIに貼り付けて画像化
+      <strong>画像だけを作る</strong>
+      文章を作らず、いきなり画像化するとき
     </span>
   </button>
 
   <button class="out" id="btn-image">
     <span class="out-ico">🖼️</span>
     <span class="out-txt">
-      <strong>レポート画像をこの場で作る</strong>
-      文字が崩れない確実版
+      <strong>この場で画像を作る</strong>
+      AIを使わない。文字が崩れない確実版
     </span>
   </button>
 </section>
@@ -455,8 +468,9 @@ function folderName(){
 function buildMarkdown(mode){
   // 画像用・整文用は指示文だけで完結させる（レポート本文が重複すると
   // AIがどちらの文字を扱えばよいか迷い、崩れやすくなる）
-  if(mode === 'aiimage') return buildImagePrompt();
-  if(mode === 'proof')   return buildProofPrompt();
+  if(mode === 'aiimage')  return buildImagePrompt();
+  if(mode === 'followup') return buildFollowupPrompt();
+  if(mode === 'proof')    return buildProofPrompt();
 
   const L = [];
   L.push('# ドッグランレポート','');
@@ -481,6 +495,81 @@ function buildMarkdown(mode){
     L.push('（写真なし）');
   }
   if(mode && PROMPTS[mode]) L.push('','---','', PROMPTS[mode]);
+  return L.join('\n');
+}
+
+/* ---------- 直前の会話を受けて画像を作らせる指示文 ---------- */
+function buildFollowupPrompt(){
+  const name = v('f-name') || 'ドッグラン';
+
+  // 数値や固有名詞はAIの記憶に頼らず再掲する。
+  // 会話が長いと料金などを取り違えるため。
+  const facts = [];
+  if(v('f-date'))       facts.push('訪問日：' + v('f-date'));
+  if(v('f-weather'))    facts.push('天気：' + v('f-weather'));
+  if(v('f-fee-dog'))    facts.push('料金：犬1頭 ' + v('f-fee-dog'));
+  if(v('f-fee-owner'))  facts.push('料金：飼い主1人 ' + v('f-fee-owner'));
+  if(v('f-park'))       facts.push('駐車場：' + v('f-park'));
+  if(v('f-hours'))      facts.push('営業時間：' + v('f-hours'));
+
+  const top = RATE_ITEMS
+    .map(([label,key])=>({label, n:scores[key]}))
+    .sort((a,b)=> b.n - a.n)
+    .slice(0,5)
+    .map(r => r.label + '　' + '★'.repeat(r.n) + '☆'.repeat(5-r.n));
+
+  const L = [];
+  L.push('# つづけて、レポート画像を作ってください','');
+  L.push('いま作ってくれた文章の内容をもとに、');
+  L.push('Instagram用の縦長レポート画像を1枚作ってください。','');
+
+  L.push('## まず、画像に載せる文字を短くしてください','');
+  L.push('さきほどの文章は長いので、そのままでは画像に載りません。');
+  L.push('同じ内容のまま、次の3つに短く割り付けてください。','');
+  L.push('・良かったところ　… 20文字以内');
+  L.push('・気になったところ … 20文字以内');
+  L.push('・今日のエピソード … 25文字以内','');
+  L.push('※さきほど書いていない出来事を、新しく足さないでください。','');
+
+  L.push('## 画像の仕様','');
+  L.push('・サイズ：縦長（4:5 または 3:4）');
+  L.push('・背景はクリーム色（#FDF8EE）、白い角丸カードを縦に並べる');
+  L.push('・かわいらしく、明るく、清潔感のあるデザイン');
+  L.push('・肉球や草木の小さなイラストを添える');
+  L.push('・写真は使わず、イラストと文字だけで構成する');
+  L.push('・白い日本スピッツ（ふわふわの白い小型犬）のイラストを1匹入れる','');
+
+  L.push('## 上から順に配置してください','');
+  L.push('**1. ヘッダー**');
+  L.push('・「ドッグランレポート」という見出し');
+  L.push('・施設名「' + name + '」を大きく');
+  L.push('・白い日本スピッツのイラスト','');
+
+  if(facts.length){
+    L.push('**2. 基本情報カード**（見出し「基本情報」）');
+    L.push('```');
+    facts.forEach(t => L.push(t));
+    L.push('```','');
+  }
+
+  L.push('**3. 評価カード**（見出し「評価」／★は黄色、☆は薄いグレー）');
+  L.push('```');
+  top.forEach(t => L.push(t));
+  L.push('```','');
+
+  L.push('**4. コメントカード3つ**');
+  L.push('・緑「良かったところ」');
+  L.push('・オレンジ「気になったところ」');
+  L.push('・ピンク「今日のエピソード」');
+  L.push('中身は、上で短くした文章を入れてください。','');
+
+  L.push('## 文字についての重要な指示','');
+  L.push('・``` で囲んだ日本語は、**一字一句そのまま**正確に描いてください');
+  L.push('・存在しない漢字や、崩れた文字を作らないでください');
+  L.push('・文字は大きめに、はっきり読めるように描いてください');
+  L.push('・丸ゴシックなど、読みやすい日本語フォントを使ってください','');
+  L.push('文字が崩れていたら指摘するので、その箇所を直してください。');
+
   return L.join('\n');
 }
 
@@ -795,7 +884,7 @@ function toast(msg){
 }
 
 /* ---------- 用途別コピー ---------- */
-const MODE_LABEL = { insta:'インスタの文章', youtube:'YouTubeの概要欄', aiimage:'レポート画像', proof:'文章の整え' };
+const MODE_LABEL = { insta:'インスタの文章', youtube:'YouTubeの概要欄', aiimage:'レポート画像', followup:'つづきの画像作成', proof:'文章の整え' };
 
 document.querySelectorAll('.out[data-mode]').forEach(btn=>{
   btn.onclick = async ()=>{

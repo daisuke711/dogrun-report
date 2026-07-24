@@ -1,4 +1,4 @@
-const CACHE = 'dogrun-report-v5';
+const CACHE = 'dogrun-report-v6';
 const ASSETS = [
   './',
   './index.html',
