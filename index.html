@@ -267,6 +267,14 @@
     </span>
   </button>
 
+  <button class="out" data-mode="proof">
+    <span class="out-ico">✏️</span>
+    <span class="out-txt">
+      <strong>文章を整える</strong>
+      誤字と表記のゆれだけ直してもらいます
+    </span>
+  </button>
+
   <button class="out" data-mode="aiimage">
     <span class="out-ico">✨</span>
     <span class="out-txt">
@@ -445,9 +453,10 @@ function folderName(){
 }
 
 function buildMarkdown(mode){
-  // 画像用は指示文だけで完結させる（レポート本文が重複すると
-  // AIがどちらの文字を描けばよいか迷い、崩れやすくなる）
+  // 画像用・整文用は指示文だけで完結させる（レポート本文が重複すると
+  // AIがどちらの文字を扱えばよいか迷い、崩れやすくなる）
   if(mode === 'aiimage') return buildImagePrompt();
+  if(mode === 'proof')   return buildProofPrompt();
 
   const L = [];
   L.push('# ドッグランレポート','');
@@ -472,6 +481,53 @@ function buildMarkdown(mode){
     L.push('（写真なし）');
   }
   if(mode && PROMPTS[mode]) L.push('','---','', PROMPTS[mode]);
+  return L.join('\n');
+}
+
+/* ---------- 文章を整える指示文 ---------- */
+function buildProofPrompt(){
+  const fields = [
+    ['良かったところ',   v('f-good')],
+    ['気になったところ', v('f-bad')],
+    ['今日のエピソード', v('f-story')]
+  ].filter(([,val]) => val);
+
+  const L = [];
+  L.push('# 文章の表記を整えてください','');
+  L.push('ドッグランの記録として書いたメモです。');
+  L.push('**書き直しはせず、表記だけを整えてください。**','');
+
+  L.push('## 直してよいもの','');
+  L.push('・誤字、脱字');
+  L.push('・送り仮名の誤り');
+  L.push('・漢字とひらがなの不統一');
+  L.push('　（例：片方が「おおい」、もう片方が「多い」→ どちらも「多い」に揃える）');
+  L.push('・句読点の抜け、明らかな文法の誤り','');
+
+  L.push('## 絶対に変えないでください','');
+  L.push('・文章の長さ（短い文は短いままにする）');
+  L.push('・書かれていない情報を足すこと');
+  L.push('・語尾や口調');
+  L.push('・言い回しを「それらしく」飾ること');
+  L.push('　（例：「緑が多い」→「豊かな緑に囲まれた素敵な空間」のような書き換えは禁止）');
+  L.push('・直すところが無ければ、そのまま返してください','');
+
+  L.push('## 元の文章','');
+  fields.forEach(([label,val])=>{
+    L.push('**' + label + '**');
+    L.push('```');
+    L.push(val);
+    L.push('```','');
+  });
+
+  L.push('## 返し方','');
+  L.push('直した文章だけを、次の形でそのまま返してください。');
+  L.push('説明や解説は不要です。','');
+  fields.forEach(([label])=>{
+    L.push('【' + label + '】');
+    L.push('（ここに直した文章）','');
+  });
+
   return L.join('\n');
 }
 
@@ -739,12 +795,20 @@ function toast(msg){
 }
 
 /* ---------- 用途別コピー ---------- */
-const MODE_LABEL = { insta:'インスタの文章', youtube:'YouTubeの概要欄', aiimage:'レポート画像' };
+const MODE_LABEL = { insta:'インスタの文章', youtube:'YouTubeの概要欄', aiimage:'レポート画像', proof:'文章の整え' };
 
 document.querySelectorAll('.out[data-mode]').forEach(btn=>{
   btn.onclick = async ()=>{
-    if(!requireName()) return;
     const mode = btn.dataset.mode;
+
+    if(mode === 'proof'){
+      if(!v('f-good') && !v('f-bad') && !v('f-story')){
+        toast('整える文章がまだありません');
+        document.getElementById('f-good').focus();
+        return;
+      }
+    } else if(!requireName()) return;
+
     const md = buildMarkdown(mode);
     try{
       await navigator.clipboard.writeText(md);
