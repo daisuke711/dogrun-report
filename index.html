@@ -267,11 +267,19 @@
     </span>
   </button>
 
+  <button class="out" data-mode="aiimage">
+    <span class="out-ico">✨</span>
+    <span class="out-txt">
+      <strong>レポート画像をAIで作る</strong>
+      指示文をコピー。AIに貼り付けて画像化
+    </span>
+  </button>
+
   <button class="out" id="btn-image">
     <span class="out-ico">🖼️</span>
     <span class="out-txt">
-      <strong>インスタのレポート画像</strong>
-      この場で画像を作ります
+      <strong>レポート画像をこの場で作る</strong>
+      文字が崩れない確実版
     </span>
   </button>
 </section>
@@ -437,6 +445,10 @@ function folderName(){
 }
 
 function buildMarkdown(mode){
+  // 画像用は指示文だけで完結させる（レポート本文が重複すると
+  // AIがどちらの文字を描けばよいか迷い、崩れやすくなる）
+  if(mode === 'aiimage') return buildImagePrompt();
+
   const L = [];
   L.push('# ドッグランレポート','');
   L.push('## 基本情報','');
@@ -460,6 +472,94 @@ function buildMarkdown(mode){
     L.push('（写真なし）');
   }
   if(mode && PROMPTS[mode]) L.push('','---','', PROMPTS[mode]);
+  return L.join('\n');
+}
+
+/* ---------- レポート画像をAIに作らせる指示文 ---------- */
+function buildImagePrompt(){
+  const name = v('f-name') || 'ドッグラン';
+  const date = v('f-date');
+  const wx   = v('f-weather');
+
+  // 画像に載せる文字は、ここで確定させてAIに渡す。
+  // AIに考えさせず「この文字列をそのまま描け」と指示するのが崩れ対策。
+  const info = [];
+  if(date)             info.push('訪問日：' + date);
+  if(wx)               info.push('天気：' + wx);
+  if(v('f-fee-dog'))   info.push('料金：犬1頭 ' + v('f-fee-dog'));
+  if(v('f-fee-owner')) info.push('料金：飼い主1人 ' + v('f-fee-owner'));
+  if(v('f-park'))      info.push('駐車場：' + v('f-park'));
+  if(v('f-addr'))      info.push('住所：' + v('f-addr'));
+  if(v('f-hours'))     info.push('営業時間：' + v('f-hours'));
+
+  // 評価は上位5件だけ。全部載せると文字が潰れる。
+  const top = RATE_ITEMS
+    .map(([label,key])=>({label, n:scores[key]}))
+    .sort((a,b)=> b.n - a.n)
+    .slice(0,5)
+    .map(r => r.label + '　' + '★'.repeat(r.n) + '☆'.repeat(5-r.n));
+
+  const good  = v('f-good')  || '';
+  const bad   = v('f-bad')   || '';
+  const story = v('f-story') || '';
+
+  const L = [];
+  L.push('# ドッグランレポート画像を作ってください','');
+  L.push('Instagram用の縦長レポート画像を1枚作ってください。');
+  L.push('載せる文字はすべてこの指示の中に書いてあります。','');
+
+  L.push('## 画像の仕様','');
+  L.push('・サイズ：縦長（4:5 または 3:4）');
+  L.push('・全体の雰囲気：クリーム色（#FDF8EE）の背景に、白い角丸カードを並べた構成');
+  L.push('・かわいらしく、明るく、清潔感のあるデザイン');
+  L.push('・手書き風のあしらいや、肉球・草・木などの小さなイラストを添える');
+  L.push('・写真は使わず、イラストと文字だけで構成する');
+  L.push('・白い日本スピッツ（ふわふわの白い小型犬）のイラストを1匹入れる','');
+
+  L.push('## 上から順に、次の要素を配置してください','');
+
+  L.push('### 1. ヘッダー（いちばん上）','');
+  L.push('・大きな見出しとして「ドッグランレポート」');
+  L.push('・その下に施設名として「' + name + '」を目立つ大きさで');
+  L.push('・白い日本スピッツのイラストを左右どちらかに配置','');
+
+  L.push('### 2. 基本情報カード','');
+  L.push('見出しは「基本情報」。以下をそのまま縦に並べる。','');
+  L.push('```');
+  info.forEach(t => L.push(t));
+  L.push('```','');
+
+  L.push('### 3. 評価カード','');
+  L.push('見出しは「評価」。★は黄色〜オレンジ、☆は薄いグレーで描く。','');
+  L.push('```');
+  top.forEach(t => L.push(t));
+  L.push('```','');
+
+  L.push('### 4. コメントカード（3つ横並び、または縦に3つ）','');
+  L.push('それぞれ見出しの色を変えて、吹き出しやカード風にする。','');
+  L.push('**緑のカード：見出し「良かったところ」**');
+  L.push('```');
+  L.push(good || '（記入なし）');
+  L.push('```','');
+  L.push('**オレンジのカード：見出し「気になったところ」**');
+  L.push('```');
+  L.push(bad || '（記入なし）');
+  L.push('```','');
+  L.push('**ピンクのカード：見出し「今日のエピソード」**');
+  L.push('```');
+  L.push(story || '（記入なし）');
+  L.push('```','');
+
+  L.push('## 文字についての重要な指示','');
+  L.push('・上の ``` で囲んだ日本語は、**一字一句そのまま**正確に描いてください');
+  L.push('・勝手に言い換えたり、要約したり、英語にしたりしないでください');
+  L.push('・存在しない漢字や、崩れた文字を作らないでください');
+  L.push('・文字は大きめに、はっきりと読めるように描いてください');
+  L.push('・日本語のフォントは、丸ゴシックなどの読みやすいものを使ってください','');
+
+  L.push('## うまくいかなかった場合','');
+  L.push('文字が崩れてしまった場合は、崩れた箇所を指摘するので修正してください。');
+
   return L.join('\n');
 }
 
@@ -639,7 +739,7 @@ function toast(msg){
 }
 
 /* ---------- 用途別コピー ---------- */
-const MODE_LABEL = { insta:'インスタの文章', youtube:'YouTubeの概要欄' };
+const MODE_LABEL = { insta:'インスタの文章', youtube:'YouTubeの概要欄', aiimage:'レポート画像' };
 
 document.querySelectorAll('.out[data-mode]').forEach(btn=>{
   btn.onclick = async ()=>{
