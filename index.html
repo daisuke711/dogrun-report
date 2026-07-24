@@ -123,6 +123,21 @@
   }
   .btn.sub{background:#fff;color:var(--ink-soft);border:1px solid var(--line);flex:0 0 auto;max-width:none;padding:14px 18px}
   .btn:active{transform:translateY(1px)}
+  .out{
+    width:100%;display:flex;align-items:center;gap:14px;text-align:left;
+    padding:15px 14px;margin-bottom:10px;background:#fff;
+    border:1.5px solid var(--line);border-radius:12px;cursor:pointer;
+    font-family:inherit;color:var(--ink);
+  }
+  .out:last-child{margin-bottom:0}
+  .out:active{background:var(--grass-soft);border-color:var(--grass)}
+  .out-ico{font-size:26px;line-height:1;flex:0 0 auto}
+  .out-txt{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .out-txt strong{font-size:16px;font-weight:700}
+  .out-txt{font-size:12.5px;color:var(--ink-soft);line-height:1.5}
+  .out.done{border-color:var(--grass);background:var(--grass-soft)}
+  #imgwrap{padding:16px;text-align:center;max-height:64vh;overflow:auto;background:#F1EEE8}
+  #imgwrap canvas{max-width:100%;height:auto;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
   .toast{
     position:fixed;bottom:88px;left:50%;transform:translateX(-50%);
     background:var(--ink);color:#fff;padding:11px 20px;border-radius:24px;
@@ -233,21 +248,47 @@
 </main>
 
 <section>
-  <h2>できあがったら</h2>
+  <h2>なにを作る？</h2>
+  <p class="hint">ボタンを押すとコピーされます。そのままAIアプリに貼り付けてください。</p>
+
+  <button class="out" data-mode="insta">
+    <span class="out-ico">📷</span>
+    <span class="out-txt">
+      <strong>インスタの文章</strong>
+      本文とハッシュタグを作ります
+    </span>
+  </button>
+
+  <button class="out" data-mode="youtube">
+    <span class="out-ico">▶️</span>
+    <span class="out-txt">
+      <strong>YouTubeの概要欄</strong>
+      タイトル案と概要欄を作ります
+    </span>
+  </button>
+
+  <button class="out" id="btn-image">
+    <span class="out-ico">🖼️</span>
+    <span class="out-txt">
+      <strong>インスタのレポート画像</strong>
+      この場で画像を作ります
+    </span>
+  </button>
+</section>
+
+<section>
+  <h2>そのほか</h2>
   <p class="hint" id="save-hint"></p>
   <div style="display:flex;gap:10px;flex-wrap:wrap">
-    <button class="btn sub" id="btn-save" style="flex:1;min-width:140px">フォルダに保存</button>
-    <button class="btn sub" id="btn-new" style="flex:1;min-width:140px">新しいレポート</button>
+    <button class="btn sub" id="btn-preview" style="flex:1;min-width:130px">下書きを見る</button>
+    <button class="btn sub" id="btn-save" style="flex:1;min-width:130px">フォルダに保存</button>
+    <button class="btn sub" id="btn-new" style="flex:1;min-width:130px">新しいレポート</button>
   </div>
 </section>
 
 <div class="bar">
   <div style="width:100%;max-width:640px">
-    <p class="saved-note" id="autosave-note" style="margin:0 0 8px;padding:0"></p>
-    <div style="display:flex;gap:10px;justify-content:center">
-      <button class="btn sub" id="btn-preview">下書き</button>
-      <button class="btn" id="btn-copy-main">コピーしてAIへ</button>
-    </div>
+    <p class="saved-note" id="autosave-note" style="margin:0;padding:0"></p>
   </div>
 </div>
 
@@ -261,6 +302,17 @@
   <pre id="mdout"></pre>
   <div class="dlg-foot">
     <button class="btn sub" id="btn-copy">本文をコピー</button>
+  </div>
+</dialog>
+
+<dialog id="imgdlg">
+  <div class="dlg-head">
+    <strong>レポート画像</strong>
+    <button id="imgdlg-close" aria-label="閉じる">×</button>
+  </div>
+  <div id="imgwrap"></div>
+  <div class="dlg-foot">
+    <button class="btn" id="btn-img-save" style="flex:1">画像を保存</button>
   </div>
 </dialog>
 
@@ -384,7 +436,7 @@ function folderName(){
   return d + '_' + n.replace(/[\\/:*?"<>|]/g,'_');
 }
 
-function buildMarkdown(){
+function buildMarkdown(mode){
   const L = [];
   L.push('# ドッグランレポート','');
   L.push('## 基本情報','');
@@ -407,44 +459,129 @@ function buildMarkdown(){
   } else {
     L.push('（写真なし）');
   }
-  L.push('','---','', AI_PROMPT);
+  if(mode && PROMPTS[mode]) L.push('','---','', PROMPTS[mode]);
   return L.join('\n');
 }
 
-const AI_PROMPT = `# AIへの依頼
-
-あなたは犬のお出かけメディアの編集者です。
-
-このレポートと写真を参考にしてください。
-
-以下を作成してください。
-
-1. Instagram投稿
-2. Googleマップレビュー
-3. ブログ記事（1000文字程度）
-4. YouTube概要欄
-5. タイトル候補を5個
-
-条件
+const COMMON_RULES = `条件
 
 ・体験していないことは書かない
+・レポートに無い情報を推測で補わない
 ・誇張しない
-・読みやすい文章
 ・親しみやすい口調
-・絵文字は適度に使用
-・SEOも考慮する
+・絵文字は適度に使用`;
+
+const PROMPTS = {
+
+insta: `# AIへの依頼（Instagram投稿）
+
+あなたは犬のお出かけメディアの編集者です。
+上のレポートをもとに、Instagramの投稿文を作ってください。
+
+## 作るもの
+
+1. 本文（1〜2案）
+   ・冒頭1行で読み手の手を止める
+   ・全体で300〜500文字
+   ・スマホで読みやすいよう、2〜3行ごとに改行を入れる
+   ・「今日のエピソード」を軸にした、体験が伝わる文章にする
+   ・評価の数字は羅列せず、良かった点は言葉で描写する
+
+2. ハッシュタグ 20〜25個
+   ・大きめのタグ（#ドッグラン #犬のいる暮らし など）
+   ・犬種や地域に絞ったタグ
+   ・施設名のタグ
+   ・行単位でまとめて、そのままコピーできる形にする
+
+3. 1枚目の写真に入れる短い文字（15文字以内）を3案
+
+${COMMON_RULES}
+・宣伝色を出さず、個人の記録として書く`,
+
+youtube: `# AIへの依頼（YouTube概要欄）
+
+あなたは犬のお出かけメディアの編集者です。
+上のレポートをもとに、YouTube動画の概要欄を作ってください。
+
+## 作るもの
+
+1. 動画タイトル案 5個
+   ・全角30文字前後
+   ・施設名と地域名を必ず入れる
+   ・煽らず、内容が正確に伝わるものにする
+
+2. 概要欄の本文
+   ・冒頭2〜3行で動画の内容がわかるようにする（検索結果に出る部分）
+   ・続けて、施設の基本情報を箇条書きで整理する
+     （料金・駐車場・営業時間・住所のうち、レポートにあるものだけ）
+   ・実際に行ってわかった良かった点と気になった点をまとめる
+   ・最後にチャンネル登録の一言を添える
+
+3. 検索用のタグ 15個程度（カンマ区切り）
+
+${COMMON_RULES}
+・料金や営業時間は変わる可能性がある旨を一言添える`,
+
+image: `# AIへの依頼（レポート画像の構成案）
+
+あなたはInstagram向けの画像を設計する編集者です。
+上のレポートをもとに、写真に重ねる文字の構成案を作ってください。
+画像そのものは作らなくて構いません。文字だけ考えてください。
+
+## 作るもの
+
+1枚目（表紙）
+　・大見出し（12文字以内）
+　・小見出し（20文字以内）
+
+2枚目（基本情報）
+　・見出しと、載せる項目を3〜5個
+
+3枚目（良かったところ）
+　・見出しと、短い箇条書き3つ（各20文字以内）
+
+4枚目（気になったところ）
+　・見出しと、短い箇条書き2つ（各20文字以内）
+
+5枚目（まとめ）
+　・ひとことでまとめた感想（30文字以内）
+
+${COMMON_RULES}
+・画像に載せる文字なので、とにかく短くする
+・1行に詰め込まず、読みやすさを優先する`
+
+};
+
+// PC保存や下書き表示用：3種類まとめて
+PROMPTS.all = `# AIへの依頼
+
+あなたは犬のお出かけメディアの編集者です。
+上のレポートをもとに、次の3つを作ってください。
+必要なものだけ使ってもらって構いません。
+
+---
+
+${PROMPTS.insta.replace(/^# AIへの依頼（Instagram投稿）\n\n[^\n]*\n[^\n]*\n\n## 作るもの\n\n/,'## 1. Instagram投稿\n\n')}
+
+---
+
+${PROMPTS.youtube.replace(/^# AIへの依頼（YouTube概要欄）\n\n[^\n]*\n[^\n]*\n\n## 作るもの\n\n/,'## 2. YouTube概要欄\n\n')}
+
+---
+
+${PROMPTS.image.replace(/^# AIへの依頼（レポート画像の構成案）\n\n[^\n]*\n[^\n]*\n[^\n]*\n\n## 作るもの\n\n/,'## 3. レポート画像の構成案\n\n')}
 `;
 
 /* ---------- プレビュー ---------- */
 const dlg = document.getElementById('dlg');
 document.getElementById('btn-preview').onclick = ()=>{
-  document.getElementById('mdout').textContent = buildMarkdown();
+  document.getElementById('mdout').textContent = buildMarkdown('all');
   dlg.showModal();
 };
 document.getElementById('dlg-close').onclick = ()=> dlg.close();
 document.getElementById('btn-copy').onclick = async ()=>{
   try{
-    await navigator.clipboard.writeText(buildMarkdown());
+    await navigator.clipboard.writeText(buildMarkdown('all'));
     toast('コピーしました');
   }catch{ toast('コピーできませんでした'); }
 };
@@ -457,7 +594,7 @@ document.getElementById('btn-save').onclick = async ()=>{
     try{
       const root = await window.showDirectoryPicker({mode:'readwrite'});
       const dir = await root.getDirectoryHandle(folderName(), {create:true});
-      await writeFile(dir, 'report.md', new Blob([buildMarkdown()],{type:'text/markdown'}));
+      await writeFile(dir, 'report.md', new Blob([buildMarkdown('all')],{type:'text/markdown'}));
       for(let i=0;i<photos.length;i++){
         await writeFile(dir, photoName(i,photos[i]), photos[i]);
       }
@@ -479,7 +616,7 @@ async function writeFile(dir, name, blob){
 }
 
 function downloadFallback(){
-  dl(new Blob([buildMarkdown()],{type:'text/markdown'}), 'report.md');
+  dl(new Blob([buildMarkdown('all')],{type:'text/markdown'}), 'report.md');
   photos.forEach((f,i)=> setTimeout(()=> dl(f, photoName(i,f)), (i+1)*300));
   toast('ダウンロードフォルダに保存しました');
 }
@@ -501,18 +638,216 @@ function toast(msg){
   tid = setTimeout(()=>t.classList.remove('show'), 2600);
 }
 
-/* ---------- コピー（スマホの主動線） ---------- */
-document.getElementById('btn-copy-main').onclick = async ()=>{
-  if(!v('f-name')){ toast('施設名を入れてください'); document.getElementById('f-name').focus(); return; }
-  const md = buildMarkdown();
+/* ---------- 用途別コピー ---------- */
+const MODE_LABEL = { insta:'インスタの文章', youtube:'YouTubeの概要欄' };
+
+document.querySelectorAll('.out[data-mode]').forEach(btn=>{
+  btn.onclick = async ()=>{
+    if(!requireName()) return;
+    const mode = btn.dataset.mode;
+    const md = buildMarkdown(mode);
+    try{
+      await navigator.clipboard.writeText(md);
+      btn.classList.add('done');
+      setTimeout(()=>btn.classList.remove('done'), 1800);
+      toast(MODE_LABEL[mode] + '用をコピーしました');
+    }catch{
+      document.getElementById('mdout').textContent = md;
+      dlg.showModal();
+      toast('長押しで選んでコピーしてください');
+    }
+  };
+});
+
+function requireName(){
+  if(v('f-name')) return true;
+  toast('施設名を入れてください');
+  document.getElementById('f-name').focus();
+  return false;
+}
+
+/* ---------- レポート画像の生成 ---------- */
+const imgdlg = document.getElementById('imgdlg');
+const imgwrap = document.getElementById('imgwrap');
+let reportCanvas = null;
+
+document.getElementById('imgdlg-close').onclick = ()=> imgdlg.close();
+
+document.getElementById('btn-image').onclick = async ()=>{
+  if(!requireName()) return;
+  imgwrap.innerHTML = '<p style="color:#6B675E;font-size:14px">作っています…</p>';
+  imgdlg.showModal();
   try{
-    await navigator.clipboard.writeText(md);
-    toast('コピーしました。AIアプリに貼り付けてください');
-  }catch{
-    document.getElementById('mdout').textContent = md;
-    dlg.showModal();
-    toast('長押しで選択してコピーしてください');
+    reportCanvas = await drawReport();
+    imgwrap.innerHTML = '';
+    imgwrap.appendChild(reportCanvas);
+  }catch(e){
+    imgwrap.innerHTML = '<p style="color:#6B675E;font-size:14px">画像を作れませんでした。もう一度お試しください。</p>';
   }
+};
+
+function loadImage(file){
+  return new Promise((res, rej)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{ URL.revokeObjectURL(url); res(img); };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); rej(new Error('load')); };
+    img.src = url;
+  });
+}
+
+// 折り返し描画。返り値は次のy座標
+function wrapText(ctx, text, x, y, maxW, lineH, maxLines){
+  const chars = [...String(text)];
+  let line = '', lines = [];
+  for(const ch of chars){
+    if(ch === '\n'){ lines.push(line); line = ''; continue; }
+    const test = line + ch;
+    if(ctx.measureText(test).width > maxW && line){
+      lines.push(line); line = ch;
+    } else { line = test; }
+  }
+  if(line) lines.push(line);
+  if(maxLines && lines.length > maxLines){
+    lines = lines.slice(0, maxLines);
+    lines[maxLines-1] = lines[maxLines-1].slice(0, -1) + '…';
+  }
+  lines.forEach((l,i)=> ctx.fillText(l, x, y + i*lineH));
+  return y + lines.length * lineH;
+}
+
+async function drawReport(){
+  const W = 1080, H = 1350;                 // Instagram 4:5
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+
+  const GRASS = '#4A7C3F', INK = '#22201C', SOFT = '#6B675E',
+        PAPER = '#FBFAF7', LINE = '#E2DED4', PAW = '#C2703F';
+  const F = '"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif';
+  const PAD = 72;
+
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(0,0,W,H);
+
+  // --- 上部：写真かカラーブロック ---
+  const HERO = 560;
+  if(photos.length){
+    try{
+      const img = await loadImage(photos[0]);
+      const r = Math.max(W/img.width, HERO/img.height);
+      const dw = img.width*r, dh = img.height*r;
+      ctx.drawImage(img, (W-dw)/2, (HERO-dh)/2, dw, dh);
+      const g = ctx.createLinearGradient(0, HERO*0.35, 0, HERO);
+      g.addColorStop(0,'rgba(0,0,0,0)');
+      g.addColorStop(1,'rgba(0,0,0,0.62)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0,0,W,HERO);
+    }catch{
+      ctx.fillStyle = GRASS; ctx.fillRect(0,0,W,HERO);
+    }
+  } else {
+    ctx.fillStyle = GRASS;
+    ctx.fillRect(0,0,W,HERO);
+  }
+
+  // 施設名（写真の上）
+  ctx.fillStyle = '#fff';
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = '700 62px ' + F;
+  const nameLines = [];
+  {
+    const chars = [...v('f-name')];
+    let line = '';
+    for(const ch of chars){
+      if(ctx.measureText(line+ch).width > W - PAD*2 && line){ nameLines.push(line); line = ch; }
+      else line += ch;
+    }
+    if(line) nameLines.push(line);
+  }
+  const shown = nameLines.slice(0,2);
+  let ny = HERO - 60 - (shown.length-1)*74;
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12;
+  shown.forEach((l,i)=> ctx.fillText(l, PAD, ny + i*74));
+  // 日付
+  ctx.font = '600 30px ' + F;
+  ctx.fillStyle = 'rgba(255,255,255,.92)';
+  const dLabel = (v('f-date')||'').replace(/-/g,'.') + (v('f-weather') ? '　' + v('f-weather') : '');
+  if(dLabel.trim()) ctx.fillText(dLabel, PAD, ny - 90);
+  ctx.shadowBlur = 0;
+
+  // --- 評価（上位のみ） ---
+  let y = HERO + 78;
+  const top = RATE_ITEMS
+    .map(([label,key])=>({label, n:scores[key]}))
+    .sort((a,b)=> b.n - a.n)
+    .slice(0,5);
+
+  ctx.font = '700 26px ' + F;
+  ctx.fillStyle = GRASS;
+  ctx.fillText('よかったところ', PAD, y);
+  y += 46;
+
+  top.forEach(item=>{
+    ctx.font = '600 32px ' + F;
+    ctx.fillStyle = INK;
+    ctx.fillText(item.label, PAD, y);
+    ctx.font = '30px ' + F;
+    ctx.fillStyle = PAW;
+    const s = '★'.repeat(item.n) + '☆'.repeat(5-item.n);
+    ctx.fillText(s, W - PAD - ctx.measureText(s).width, y);
+    y += 22;
+    ctx.strokeStyle = LINE; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W-PAD, y); ctx.stroke();
+    y += 36;
+  });
+
+  // --- コメント ---
+  y += 14;
+  const comment = v('f-story') || v('f-good') || '';
+  if(comment){
+    ctx.font = '30px ' + F;
+    ctx.fillStyle = SOFT;
+    y = wrapText(ctx, comment, PAD, y, W - PAD*2, 46, 3);
+  }
+
+  // --- 下部：料金など ---
+  const footY = H - 118;
+  ctx.strokeStyle = LINE; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(PAD, footY - 46); ctx.lineTo(W-PAD, footY - 46); ctx.stroke();
+
+  const info = [];
+  if(v('f-fee-dog'))   info.push('犬 ' + v('f-fee-dog'));
+  if(v('f-fee-owner')) info.push('人 ' + v('f-fee-owner'));
+  if(v('f-park'))      info.push('P ' + v('f-park'));
+  ctx.font = '28px ' + F;
+  ctx.fillStyle = SOFT;
+  if(info.length) wrapText(ctx, info.join('　/　'), PAD, footY, W - PAD*2, 40, 2);
+
+  // 肉球マーク
+  ctx.fillStyle = PAW;
+  const px = W - PAD - 18, py = footY - 6, s = 15;
+  ctx.beginPath(); ctx.ellipse(px, py+s*0.28, s*0.52, s*0.45, 0, 0, 7); ctx.fill();
+  [[-0.52,-0.62],[-0.18,-0.86],[0.18,-0.86],[0.52,-0.62]].forEach(([dx,dy])=>{
+    ctx.beginPath(); ctx.ellipse(px+dx*s, py+dy*s, s*0.25, s*0.25, 0, 0, 7); ctx.fill();
+  });
+
+  return c;
+}
+
+document.getElementById('btn-img-save').onclick = ()=>{
+  if(!reportCanvas) return;
+  reportCanvas.toBlob(blob=>{
+    if(!blob){ toast('保存できませんでした'); return; }
+    const name = folderName() + '.png';
+    const file = new File([blob], name, {type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({files:[file]}).catch(()=>{});
+    } else {
+      dl(blob, name);
+      toast('画像を保存しました');
+    }
+  }, 'image/png');
 };
 
 /* ---------- 自動保存 ---------- */
