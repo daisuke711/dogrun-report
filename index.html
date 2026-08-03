@@ -461,7 +461,7 @@ function buildFollowupPrompt(){
   L.push('※さきほど書いていない出来事を、新しく足さないでください。','');
 
   L.push('## 画像の仕様','');
-  L.push('・サイズ：縦長（4:5 または 3:4）');
+  L.push('・サイズ：必ず縦長の4:5（1080×1350ピクセル）で作る。他の比率にはしない');
   L.push('・背景はクリーム色（#FDF8EE）、白い角丸カードを縦に並べる');
   L.push('・かわいらしく、明るく、清潔感のあるデザイン');
   L.push('・肉球や草木の小さなイラストを添える');
@@ -583,7 +583,7 @@ function buildImagePrompt(){
   L.push('載せる文字はすべてこの指示の中に書いてあります。','');
 
   L.push('## 画像の仕様','');
-  L.push('・サイズ：縦長（4:5 または 3:4）');
+  L.push('・サイズ：必ず縦長の4:5（1080×1350ピクセル）で作る。他の比率にはしない');
   L.push('・全体の雰囲気：クリーム色（#FDF8EE）の背景に、白い角丸カードを並べた構成');
   L.push('・かわいらしく、明るく、清潔感のあるデザイン');
   L.push('・手書き風のあしらいや、肉球・草・木などの小さなイラストを添える');
@@ -955,6 +955,7 @@ async function drawReport(){
 
   ctx.fillStyle = P.CREAM;
   ctx.fillRect(0,0,W,H);
+  const contentH = H;   // 中身を描いた自然な高さ（後で4:5に収める）
 
   // ---- ヘッダー ----
   ctx.fillStyle = '#FFFCF5';
@@ -1044,7 +1045,27 @@ async function drawReport(){
     y += h + 22;
   });
 
-  return c;
+  // ---- 4:5（1080×1350）に固定して収める ----
+  const OUT_W = 1080, OUT_H = 1350;   // Instagram フィード用 4:5
+  const out = document.createElement('canvas');
+  out.width = OUT_W; out.height = OUT_H;
+  const octx = out.getContext('2d');
+
+  octx.fillStyle = P.CREAM;
+  octx.fillRect(0, 0, OUT_W, OUT_H);
+
+  // 横幅を基準に倍率を決め、縦がはみ出す場合はさらに縮める（文字も一緒に縮む）
+  const scale = Math.min(OUT_W / W, OUT_H / contentH);
+  const drawW = W * scale;
+  const drawH = contentH * scale;
+  const dx = (OUT_W - drawW) / 2;
+  const dy = contentH * scale < OUT_H ? (OUT_H - drawH) / 2 : 0;  // 余ったら中央、収まらなければ上詰め
+
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = 'high';
+  octx.drawImage(c, 0, 0, W, contentH, dx, dy, drawW, drawH);
+
+  return out;
 }
 
 document.getElementById('btn-img-save').onclick = ()=>{
